@@ -1,0 +1,48 @@
+from nba_api.stats.endpoints import leaguedashplayerstats
+import pandas as pd
+
+# Fetch player stats for both seasons
+stats_prev = leaguedashplayerstats.LeagueDashPlayerStats(season='2024-25').get_data_frames()[0]
+stats_curr = leaguedashplayerstats.LeagueDashPlayerStats(season='2025-26').get_data_frames()[0]
+
+# Select relevant columns (REB instead of PTS/AST)
+stats_prev = stats_prev[['PLAYER_ID', 'PLAYER_NAME', 'GP', 'REB']]
+stats_curr = stats_curr[['PLAYER_ID', 'GP', 'REB']]
+
+# Calculate RPG for each season
+stats_prev['RPG_prev'] = stats_prev['REB'] / stats_prev['GP']
+stats_curr['RPG_curr'] = stats_curr['REB'] / stats_curr['GP']
+
+# Merge data on PLAYER_ID
+merged_stats = pd.merge(stats_prev, stats_curr, on='PLAYER_ID', suffixes=('_prev', '_curr'))
+
+# Calculate RPG differential
+merged_stats['RPG_DIFF'] = merged_stats['RPG_curr'] - merged_stats['RPG_prev']
+
+# Filter players with positive RPG differential and sort
+positive_diff = merged_stats[(merged_stats['RPG_DIFF'] > 0) & (merged_stats['GP_curr'] >= 40)].sort_values(by='RPG_DIFF', ascending=False)
+
+# Get top 25 players
+top_25 = positive_diff.head(25)
+
+# Select and rename columns for clarity
+top_25_display = top_25[[
+    'PLAYER_NAME',
+    'RPG_prev',
+    'RPG_curr',
+    'RPG_DIFF',
+    'GP_prev',
+    'GP_curr'
+]].rename(columns={
+    'GP_prev': 'GP_2024_25',
+    'RPG_prev': 'RPG_2024_25',
+    'GP_curr': 'GP_2025_26',
+    'RPG_curr': 'RPG_2025_26',
+    'RPG_DIFF': 'RPG_Differential'
+})
+
+# Round numeric columns for readability
+top_25_display[['RPG_2024_25', 'RPG_2025_26', 'RPG_Differential']] = top_25_display[['RPG_2024_25', 'RPG_2025_26', 'RPG_Differential']].round(2)
+
+# Print the results
+print(top_25_display.to_string(index=False))
