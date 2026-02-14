@@ -1,0 +1,48 @@
+from nba_api.stats.endpoints import leaguedashplayerstats
+import pandas as pd
+
+# Fetch player stats for both seasons
+stats_prev = leaguedashplayerstats.LeagueDashPlayerStats(season='2024-25').get_data_frames()[0]
+stats_curr = leaguedashplayerstats.LeagueDashPlayerStats(season='2025-26').get_data_frames()[0]
+
+# Select relevant columns (STL instead of PTS/AST/REB)
+stats_prev = stats_prev[['PLAYER_ID', 'PLAYER_NAME', 'GP', 'STL']]
+stats_curr = stats_curr[['PLAYER_ID', 'GP', 'STL']]
+
+# Calculate SPG for each season
+stats_prev['SPG_prev'] = stats_prev['STL'] / stats_prev['GP']
+stats_curr['SPG_curr'] = stats_curr['STL'] / stats_curr['GP']
+
+# Merge data on PLAYER_ID
+merged_stats = pd.merge(stats_prev, stats_curr, on='PLAYER_ID', suffixes=('_prev', '_curr'))
+
+# Calculate SPG differential
+merged_stats['SPG_DIFF'] = merged_stats['SPG_curr'] - merged_stats['SPG_prev']
+
+# Filter players with positive SPG differential and sort
+positive_diff = merged_stats[(merged_stats['SPG_DIFF'] > 0) & (merged_stats['GP_curr'] >= 40)].sort_values(by='SPG_DIFF', ascending=False)
+
+# Get top 25 players
+top_25 = positive_diff.head(25)
+
+# Select and rename columns for clarity
+top_25_display = top_25[[
+    'PLAYER_NAME',
+    'SPG_prev',
+    'SPG_curr',
+    'SPG_DIFF',
+    'GP_prev',
+    'GP_curr'
+]].rename(columns={
+    'GP_prev': 'GP_2024_25',
+    'SPG_prev': 'SPG_2024_25',
+    'GP_curr': 'GP_2025_26',
+    'SPG_curr': 'SPG_2025_26',
+    'SPG_DIFF': 'SPG_Differential'
+})
+
+# Round numeric columns for readability
+top_25_display[['SPG_2024_25', 'SPG_2025_26', 'SPG_Differential']] = top_25_display[['SPG_2024_25', 'SPG_2025_26', 'SPG_Differential']].round(2)
+
+# Print the results
+print(top_25_display.to_string(index=False))
