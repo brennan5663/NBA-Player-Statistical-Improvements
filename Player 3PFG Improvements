@@ -1,0 +1,53 @@
+from nba_api.stats.endpoints import leaguedashplayerstats
+import pandas as pd
+
+# Fetch player stats for both seasons
+stats_prev = leaguedashplayerstats.LeagueDashPlayerStats(season='2024-25').get_data_frames()[0]
+stats_curr = leaguedashplayerstats.LeagueDashPlayerStats(season='2025-26').get_data_frames()[0]
+
+# Select relevant columns (3PM and 3P%)
+stats_prev = stats_prev[['PLAYER_ID', 'PLAYER_NAME', 'GP', 'FG3M', 'FG3_PCT']]
+stats_curr = stats_curr[['PLAYER_ID', 'GP', 'FG3M', 'FG3_PCT']]
+
+# Calculate Three-Pointers Made Per Game (3PM/G) for each season
+stats_prev['3PMG_prev'] = (stats_prev['FG3M'] / stats_prev['GP'])
+stats_curr['3PMG_curr'] = (stats_curr['FG3M'] / stats_curr['GP'])
+
+# Merge data on PLAYER_ID
+merged_stats = pd.merge(stats_prev, stats_curr, on='PLAYER_ID', suffixes=('_prev', '_curr'))
+
+# Calculate 3PM/G differential
+merged_stats['3PMG_DIFF'] = merged_stats['3PMG_curr'] - merged_stats['3PMG_prev']
+
+# Filter players with positive 3PM/G differential and sort
+positive_diff = merged_stats[(merged_stats['3PMG_DIFF'] > 0) & (merged_stats['GP_curr'] >= 40)].sort_values(by='3PMG_DIFF', ascending=False)
+
+# Get top 25 players
+top_25 = positive_diff.head(25)
+
+# Select and rename columns for clarity, include 3P% for context
+top_25_display = top_25[[
+    'PLAYER_NAME',
+    'FG3_PCT_curr',
+    '3PMG_prev',
+    '3PMG_curr',
+    '3PMG_DIFF',
+    'FG3_PCT_prev',
+    'GP_prev',
+    'GP_curr'
+]].rename(columns={
+    'GP_prev': 'GP_2024_25',
+    '3PMG_prev': '3PMG_2024_25',
+    'GP_curr': 'GP_2025_26',
+    '3PMG_curr': '3PMG_2025_26',
+    '3PMG_DIFF': '3PMG_Differential',
+    'FG3_PCT_prev': '3P%_2024_25',
+    'FG3_PCT_curr': '3P%_2025_26'
+})
+
+# Round numeric columns for readability
+top_25_display[['3PMG_2024_25', '3PMG_2025_26', '3PMG_Differential', '3P%_2024_25', '3P%_2025_26']] = \
+    top_25_display[['3PMG_2024_25', '3PMG_2025_26', '3PMG_Differential', '3P%_2024_25', '3P%_2025_26']].round(3)
+
+# Print the results
+print(top_25_display.to_string(index=False))
