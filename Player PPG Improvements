@@ -1,0 +1,47 @@
+from nba_api.stats.endpoints import leaguedashplayerstats
+import pandas as pd
+
+# Fetch player stats for both seasons
+stats_prev = leaguedashplayerstats.LeagueDashPlayerStats(season='2024-25').get_data_frames()[0]
+stats_curr = leaguedashplayerstats.LeagueDashPlayerStats(season='2025-26').get_data_frames()[0]
+
+# Select relevant columns
+stats_prev = stats_prev[['PLAYER_ID', 'PLAYER_NAME', 'GP', 'PTS']]
+stats_curr = stats_curr[['PLAYER_ID', 'GP', 'PTS']]
+
+# Calculate PPG for each season
+stats_prev['PPG_prev'] = stats_prev['PTS'] / stats_prev['GP']
+stats_curr['PPG_curr'] = stats_curr['PTS'] / stats_curr['GP']
+
+# Merge data on PLAYER_ID
+merged_stats = pd.merge(stats_prev, stats_curr, on='PLAYER_ID', suffixes=('_prev', '_curr'))
+
+# Calculate PPG differential
+merged_stats['PPG_DIFF'] = merged_stats['PPG_curr'] - merged_stats['PPG_prev']
+
+# Filter players with positive PPG differential and sort
+# Filter players with positive PPG differential and at least x games played in 2025-26
+positive_diff = merged_stats[(merged_stats['PPG_DIFF'] > 0) & (merged_stats['GP_curr'] >= 40)].sort_values(by='PPG_DIFF', ascending=False)
+
+# Get top 25 players
+top_25 = positive_diff.head(25)
+
+# Select and rename columns for clarity
+top_25_display = top_25[[
+    'PLAYER_NAME',
+    'PPG_prev',
+      'PPG_curr',
+    'PPG_DIFF', 'GP_prev', 'GP_curr'
+]].rename(columns={
+    'GP_prev': 'GP_2024_25',
+    'PPG_prev': 'PPG_2024_25',
+    'GP_curr': 'GP_2025_26',
+    'PPG_curr': 'PPG_2025_26',
+    'PPG_DIFF': 'PPG_Differential'
+})
+
+# Round numeric columns for readability
+top_25_display[['PPG_2024_25', 'PPG_2025_26', 'PPG_Differential']] = top_25_display[['PPG_2024_25', 'PPG_2025_26', 'PPG_Differential']].round(2)
+
+# Print the results
+print(top_25_display.to_string(index=False))
